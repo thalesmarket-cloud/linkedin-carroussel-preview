@@ -1,28 +1,43 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  Upload, Trash2, Eye, Smartphone, Monitor, Shield, ArrowLeft, ArrowRight,
-  GripVertical, AlertTriangle, CheckCircle, Image as ImageIcon, HelpCircle
+  Upload, Trash2, Smartphone, Monitor, ArrowLeft, ArrowRight,
+  GripVertical, Image as ImageIcon, HelpCircle, ThumbsUp, MessageSquare,
+  Share2, Send, Check, Sparkles, Link as LinkIcon, AlertCircle, Copy
 } from "lucide-react";
 
 interface Slide {
   id: string;
   name: string;
-  dataUrl: string;
+  dataUrl: string; // local base64 or public web URL
   size: number;
   width: number;
   height: number;
-  isValidDimensions: boolean; // Exact standard of 1080x1350 px
 }
 
 export default function App() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
-  const [safeAreaOn, setSafeAreaOn] = useState<boolean>(true);
   
+  // Custom advertiser post states
+  const [companyName, setCompanyName] = useState<string>("Mon Entreprise");
+  const [companyTitle, setCompanyTitle] = useState<string>("B2B Marketing Architect & Coach");
+  const [adText, setAdText] = useState<string>(
+    "🚀 Saviez-vous que les carrousels LinkedIn génèrent 3x plus d'engagement qu'une image standard ?\n\n🎯 Cependant, il y a un piège : les éléments clés de vos visuels (textes importants, boutons de swipe, visages) sont souvent masqués par l'interface de LinkedIn (numérotation en haut à droite, barre de défilement bleue en bas).\n\n👇 Entrez votre texte publicitaire ci-contre, glissez vos slides et activez les \"zones de sécurité\" pour adapter vos créas directement pour mobile et desktop !"
+  );
+  const [isAdTextExpanded, setIsAdTextExpanded] = useState<boolean>(false);
+  
+  // Image URL input state
+  const [urlInput, setUrlInput] = useState<string>("");
+  const [urlInputError, setUrlInputError] = useState<string>("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  // Sharing states
+  const [shareCopied, setShareCopied] = useState<boolean>(false);
+  const [largeFilesWarning, setLargeFilesWarning] = useState<boolean>(false);
 
   // Helper file size formatter
   const formatSize = (bytes: number) => {
@@ -33,19 +48,87 @@ export default function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
-  // Pre-load default template slides to guide user immediately
+  // Safe encoding and decoding of state in URL Hash
+  const serializeState = (currentSlides: Slide[], text: string, name: string, title: string) => {
+    try {
+      const compactSlides = currentSlides.map(s => ({
+        id: s.id,
+        name: s.name,
+        dataUrl: s.dataUrl,
+        size: s.size,
+        width: s.width,
+        height: s.height
+      }));
+
+      const stateObj = {
+        slides: compactSlides,
+        adText: text,
+        companyName: name,
+        companyTitle: title
+      };
+
+      const jsonStr = JSON.stringify(stateObj);
+      // UTF-8 friendly Base 64 encoding
+      const encoded = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) => {
+        return String.fromCharCode(parseInt(p1, 16));
+      }));
+      return encoded;
+    } catch (e) {
+      console.error("Error serializing state:", e);
+      return null;
+    }
+  };
+
+  const deserializeState = (hash: string) => {
+    try {
+      const decoded = decodeURIComponent(atob(hash).split('').map((c) => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(decoded);
+    } catch (e) {
+      console.error("Error deserializing state:", e);
+      return null;
+    }
+  };
+
+  // Preload default templates or restore from URL Hash on mount
   useEffect(() => {
-    // Elegant system templates
+    const hash = window.location.hash;
+    if (hash && hash.startsWith("#state=")) {
+      const encodedState = hash.slice("#state=".length);
+      const restored = deserializeState(encodedState);
+      if (restored) {
+        if (Array.isArray(restored.slides)) setSlides(restored.slides);
+        if (restored.adText !== undefined) setAdText(restored.adText);
+        if (restored.companyName !== undefined) setCompanyName(restored.companyName);
+        if (restored.companyTitle !== undefined) setCompanyTitle(restored.companyTitle);
+        return;
+      }
+    }
+
+    // Default Fallback Template Slides if no hash is present
     const generateDemoSvg = (title: string, subtitle: string, step: string, bg: string, textCol: string) => {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" width="1080" height="1350">
         <rect width="100%" height="100%" fill="${bg}"/>
-        <circle cx="900" cy="200" r="300" fill="white" fill-opacity="0.04" />
-        <rect x="100" y="100" width="30" height="30" rx="8" fill="${textCol}" fill-opacity="0.8"/>
-        <text x="150" y="122" font-family="system-ui, sans-serif" font-weight="bold" font-size="20" fill="${textCol}" fill-opacity="0.7">APERÇU CARROUSEL</text>
-        <text x="100" y="550" font-family="system-ui, sans-serif" font-weight="800" font-size="64" fill="${textCol}">${title}</text>
-        <text x="100" y="650" font-family="system-ui, sans-serif" font-weight="400" font-size="32" fill="${textCol}" fill-opacity="0.8">${subtitle}</text>
-        <text x="100" y="1150" font-family="system-ui, sans-serif" font-weight="950" font-size="160" fill="${textCol}" fill-opacity="0.12">${step}</text>
-        <text x="100" y="1250" font-family="system-ui, sans-serif" font-weight="bold" font-size="22" fill="${textCol}" fill-opacity="0.5">Glissez vers la gauche ➔</text>
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.1" />
+            <stop offset="100%" style="stop-color:#000000;stop-opacity:0.25" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grad)" />
+        <circle cx="900" cy="200" r="320" fill="white" fill-opacity="0.05" />
+        <circle cx="100" cy="1100" r="220" fill="black" fill-opacity="0.1" />
+        
+        <g transform="translate(100, 100)">
+          <rect width="180" height="40" rx="10" fill="${textCol}" fill-opacity="0.15" />
+          <text x="90" y="25" font-family="system-ui, sans-serif" font-weight="bold" font-size="14" fill="${textCol}" text-anchor="middle">SLIDE ${step}</text>
+        </g>
+        
+        <text x="100" y="480" font-family="system-ui, sans-serif" font-weight="900" font-size="70" fill="${textCol}" letter-spacing="-1">${title}</text>
+        <text x="100" y="580" font-family="system-ui, sans-serif" font-weight="400" font-size="34" fill="${textCol}" fill-opacity="0.85" letter-spacing="-0.5">${subtitle}</text>
+        
+        <text x="100" y="1180" font-family="system-ui, sans-serif" font-weight="bold" font-size="24" fill="${textCol}" fill-opacity="0.6">Glissez vers la gauche ➔</text>
       </svg>`;
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     };
@@ -54,20 +137,18 @@ export default function App() {
       {
         id: "demo-1",
         name: "01_Introduction.png",
-        dataUrl: generateDemoSvg("Titre de votre Carrousel", "Glissez vos propres images à gauche", "01", "#0a66c2", "#ffffff"),
-        size: 15400,
+        dataUrl: generateDemoSvg("Votre Super Carrousel", "Glissez vos slides ou insérez des images", "01", "#0a66c2", "#ffffff"),
+        size: 18200,
         width: 1080,
-        height: 1350,
-        isValidDimensions: true
+        height: 1350
       },
       {
         id: "demo-2",
-        name: "02_Guide_Dimensions.png",
-        dataUrl: generateDemoSvg("Format Idéal LinkedIn", "Portrait standard 1080 x 1350 px", "02", "#1d2226", "#ffffff"),
-        size: 14200,
+        name: "02_Guide_Pratique.png",
+        dataUrl: generateDemoSvg("Prévisualisation instantanée", "Modifiez les textes pour tester votre copywriting publicitaire", "02", "#1d2226", "#ffffff"),
+        size: 16500,
         width: 1080,
-        height: 1350,
-        isValidDimensions: true
+        height: 1350
       }
     ]);
   }, []);
@@ -86,6 +167,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [slides.length]);
 
+  // Monitor total size of slides to warn the user if URL length becomes critical for local files
+  useEffect(() => {
+    let totalLength = 0;
+    slides.forEach(s => {
+      if (s.dataUrl && s.dataUrl.startsWith("data:")) {
+        totalLength += s.dataUrl.length;
+      }
+    });
+    // If total base64 content exceeds roughly 100KB, URL sharing might be unstable or cut off by browsers
+    setLargeFilesWarning(totalLength > 120000);
+  }, [slides]);
+
   // Handle local user files upload
   const handleFiles = (files: FileList) => {
     const loadedSlides: Slide[] = [];
@@ -101,7 +194,6 @@ export default function App() {
         img.onload = () => {
           const width = img.width;
           const height = img.height;
-          const isValidDimensions = width === 1080 && height === 1350;
 
           loadedSlides.push({
             id: Math.random().toString(36).substring(2, 9),
@@ -109,15 +201,13 @@ export default function App() {
             dataUrl,
             size: file.size,
             width,
-            height,
-            isValidDimensions
+            height
           });
 
           processedCount++;
           if (processedCount === files.length) {
             setSlides((prev) => {
               const updated = [...prev, ...loadedSlides];
-              // default to first added if workspace was empty
               if (prev.length === 0 && updated.length > 0) {
                 setCurrentIndex(0);
               }
@@ -135,6 +225,41 @@ export default function App() {
     if (e.target.files) {
       handleFiles(e.target.files);
     }
+  };
+
+  // Add slide via image URL
+  const handleAddImageUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!urlInput.trim()) return;
+    setUrlInputError("");
+
+    // Minimal validation
+    if (!urlInput.startsWith("http://") && !urlInput.startsWith("https://") && !urlInput.startsWith("data:")) {
+      setUrlInputError("Le lien doit commencer par http:// ou https://");
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const newSlide: Slide = {
+        id: Math.random().toString(36).substring(2, 9),
+        name: `Web_Image_${slides.length + 1}.png`,
+        dataUrl: urlInput.trim(),
+        size: 0,
+        width: img.width,
+        height: img.height
+      };
+      setSlides(prev => {
+        const updated = [...prev, newSlide];
+        if (prev.length === 0) setCurrentIndex(0);
+        return updated;
+      });
+      setUrlInput("");
+    };
+    img.onerror = () => {
+      setUrlInputError("Impossible de charger cette image. Vérifiez que le lien pointe directement vers un format d'image valide.");
+    };
+    img.src = urlInput.trim();
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -192,18 +317,36 @@ export default function App() {
     setCurrentIndex(0);
   };
 
+  // Generate and copy share link to clipboard
+  const handleShareProject = () => {
+    const serialized = serializeState(slides, adText, companyName, companyTitle);
+    if (!serialized) return;
+
+    const shareUrl = `${window.location.origin}${window.location.pathname}#state=${serialized}`;
+    
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    }).catch(err => {
+      console.error("Failed to copy link:", err);
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-[#F3F2EF] text-slate-900 flex flex-col font-sans" id="app-root">
+    <div className="min-h-screen bg-[#F4F5F7] text-slate-950 flex flex-col font-sans" id="app-root">
       
       {/* Navigation Top Header Bar */}
-      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 shadow-sm">
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 shadow-sm z-30">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 bg-[#0a66c2] text-white rounded flex items-center justify-center font-black text-lg">
+          <div className="w-8 h-8 bg-[#0a66c2] text-white rounded flex items-center justify-center font-black text-xl shadow-sm select-none">
             in
           </div>
           <div>
-            <h1 className="font-bold text-sm tracking-tight text-slate-900 leading-none">Prévisualisation Simple</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Carrousel LinkedIn (1080 × 1350 px)</p>
+            <div className="flex items-center gap-1.5">
+              <h1 className="font-bold text-sm tracking-tight text-slate-900 leading-none">Simulateur de Carrousel</h1>
+              <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 py-0.5 rounded">Partage Vercel</span>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5">Importez, ordonnez, prévisualisez et partagez l'aperçu réel</p>
           </div>
         </div>
 
@@ -211,292 +354,493 @@ export default function App() {
           {slides.length > 0 && (
             <button
               onClick={clearAll}
-              className="text-slate-500 hover:text-red-650 font-semibold cursor-pointer py-1 px-2 hover:bg-slate-50 rounded"
+              className="text-slate-500 hover:text-red-650 font-semibold cursor-pointer py-1 px-2.5 hover:bg-slate-100 rounded-lg transition"
             >
-              Vider le Workspace
+              Vider le projet
             </button>
           )}
-          <span className="font-mono bg-slate-100 border border-slate-200 text-slate-600 px-2.5 py-1 rounded-full font-bold">
+          <span className="font-mono bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1 rounded-full font-bold shadow-sm">
             {slides.length} {slides.length > 1 ? "slides" : "slide"}
           </span>
         </div>
       </header>
 
       {/* Primary Layout splits */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden h-full max-w-[1500px] w-full mx-auto" id="app-body-split">
+      <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 overflow-hidden h-full w-full mx-auto" id="app-body-split">
         
-        {/* LEFT COLUMN: Import & List (5 Cols) */}
-        <section className="lg:col-span-4 p-5 border-r border-slate-200 bg-white flex flex-col overflow-y-auto" id="col-import">
-          <div className="mb-4">
-            <h2 className="text-base font-bold text-slate-850 tracking-tight">1. Importez vos images</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Sélectionnez ou déposez vos slides ci-dessous.</p>
-          </div>
-
-          {/* Dragger Zone */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 mb-5 ${
-              isDragOver
-                ? "border-[#0a66c2] bg-blue-50/10 scale-[0.98]"
-                : "border-slate-300 hover:border-slate-400 hover:bg-slate-50/50"
-            }`}
-            id="drop-zone"
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              multiple
-              accept="image/png, image/jpeg, image/webp"
-              className="hidden"
-            />
-            <div className="p-3 bg-blue-50 text-[#0a66c2] rounded-full mb-2.5">
-              <Upload className="w-5 h-5" />
-            </div>
-            <p className="text-xs font-semibold text-slate-750">Glissez-déposez vos images ici</p>
-            <p className="text-[10px] text-slate-400 mt-1">PNG, JPG ou WEBP (Max 50 Mo)</p>
-          </div>
-
-          <div className="flex-1 flex flex-col min-h-[250px]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ordre des Slides</span>
-              <span className="text-[10px] text-slate-400">Glissez un élément pour réorganiser</span>
+        {/* LEFT COLUMN: Controls, Text Pub, Light Image Import Tabs, Share Actions (5 Cols / 12) */}
+        <section className="xl:col-span-5 p-5 border-r border-slate-200 bg-white flex flex-col overflow-y-auto space-y-5" id="col-import">
+          
+          {/* SHARE CARD ACTION PANEL - NEW FEATURE FOR VERCEL DEPLOYMENT & SHARABLE LINK */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-[#0a66c2] text-white rounded-lg flex items-center justify-center">
+                <Share2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Partager le Carrousel réel </h3>
+                <p className="text-[10px] text-slate-500">Transmettez le lien exact de l'aperçu prêt à être visionné</p>
+              </div>
             </div>
 
-            {slides.length > 0 ? (
-              <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1" id="file-list">
-                {slides.map((slide, index) => {
-                  const isActive = index === currentIndex;
-                  return (
-                    <div
-                      key={slide.id}
-                      draggable
-                      onDragStart={() => handleDragStartSlide(index)}
-                      onDragOver={(e) => handleDragOverSlide(e, index)}
-                      onDragEnd={handleDragEndSlide}
-                      onClick={() => setCurrentIndex(index)}
-                      className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer ${
-                        isActive
-                          ? "border-[#0a66c2] bg-blue-50/10 ring-1 ring-[#0a66c2]/20"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                      id={`slide-item-${index}`}
-                    >
-                      <div className="text-slate-400 cursor-grab active:cursor-grabbing shrink-0">
-                        <GripVertical className="w-3.5 h-3.5" />
-                      </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Une fois déployé ou partagé, vous pouvez envoyer ce lien à vos collègues ou vos clients. Ils verront exactement vos images et votre accroche en temps réel !
+            </p>
 
-                      <div className="w-5 h-5 flex items-center justify-center bg-slate-900 text-white rounded-full font-bold text-[10px] shrink-0 font-mono">
-                        {index + 1}
-                      </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleShareProject}
+                type="button"
+                className={`w-full flex items-center justify-center gap-2 text-xs font-bold py-2.5 px-4 rounded-lg shadow-sm transition-all cursor-pointer ${
+                  shareCopied
+                    ? "bg-emerald-600 text-white"
+                    : "bg-[#0a66c2] hover:bg-blue-700 text-white"
+                }`}
+              >
+                {shareCopied ? (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Lien de partage copié avec succès !</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copier le Lien de Partage 🔗</span>
+                  </>
+                )}
+              </button>
 
-                      <div className="w-10 h-12 bg-slate-100 border border-slate-200 rounded overflow-hidden shrink-0 relative flex items-center justify-center">
-                        <img
-                          src={slide.dataUrl}
-                          alt={slide.name}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
+              {largeFilesWarning && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-800 flex items-start gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Attention sur le partage d'images locales limitées</span>
+                    <p className="mt-0.5 leading-tight">
+                      Certains navigateurs coupent les URL trop longues contenant de gros fichiers hors ligne. Pour un partage parfait et stable, utilisez l'onglet <b>"Par URL d'image"</b> ci-dessous avec des liens d'images (Imgur, Unsplash...) !
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-slate-800 truncate" title={slide.name}>
-                          {slide.name}
-                        </p>
-                        <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400 mt-0.5">
-                          <span>{formatSize(slide.size)}</span>
-                          <span>•</span>
-                          <span className={slide.isValidDimensions ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
-                            {slide.width}x{slide.height} px
-                          </span>
-                        </div>
-                      </div>
+          {/* SECTION A: EDIT ADVERTISING TEXT */}
+          <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#0a66c2]" />
+                <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Texte de l'accroche LinkedIn</h2>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 bg-white border px-1.5 py-0.5 rounded">
+                {adText.length} caractères
+              </span>
+            </div>
 
-                      <button
-                        onClick={(e) => deleteSlide(index, e)}
-                        type="button"
-                        className="p-1 text-slate-400 hover:text-red-650 transition-colors rounded hover:bg-slate-50 shrink-0"
-                        title="Supprimer la slide"
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Émetteur / Nom du Profil</label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full text-xs mt-1 p-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0a66c2]"
+                  placeholder="Ex: Thales Market"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Slogan / Titre professionnel</label>
+                <input
+                  type="text"
+                  value={companyTitle}
+                  onChange={(e) => setCompanyTitle(e.target.value)}
+                  className="w-full text-xs mt-1 p-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0a66c2]"
+                  placeholder="Ex: Head of Brand & Copywriting"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-slate-600 uppercase">Message descriptif ou publicitaire</label>
+              <textarea
+                value={adText}
+                onChange={(e) => setAdText(e.target.value)}
+                rows={4}
+                className="w-full text-xs mt-1.5 p-3 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0a66c2] leading-normal"
+                placeholder="Exprimez votre message à l'audience..."
+              />
+            </div>
+          </div>
+
+          {/* SECTION B: IMAGE IMPORT METHODS TABS (Local and Web Links) */}
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">1. Ajoutez vos images</h2>
+              <p className="text-[10px] text-slate-400">Importez des fichiers ou insérez des URL d'images pour le partage à distance</p>
+            </div>
+
+            {/* URL input section */}
+            <form onSubmit={handleAddImageUrl} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+              <span className="text-[10px] font-bold text-slate-600 uppercase flex items-center gap-1">
+                <LinkIcon className="w-3 h-3" />
+                <span>Méthode A : Par URL publique d'image (Partage Vercel Optimal)</span>
+              </span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={(e) => {
+                    setUrlInput(e.target.value);
+                    setUrlInputError("");
+                  }}
+                  placeholder="Ex: https://images.unsplash.com/photo-1557804506-669a67965ba0?fit=crop&w=1080&h=1350"
+                  className="flex-1 text-xs p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0a66c2]"
+                />
+                <button
+                  type="submit"
+                  className="bg-[#1d2226] text-white hover:bg-slate-800 text-xs font-bold px-3 py-2 rounded-lg cursor-pointer transition"
+                >
+                  Ajouter URL
+                </button>
+              </div>
+              {urlInputError ? (
+                <p className="text-[10px] text-red-600 font-semibold">{urlInputError}</p>
+              ) : (
+                <p className="text-[9px] text-slate-400 font-normal">
+                  Idéal pour charger des visuels hébergés de manière permanente et les envoyer directement dans votre lien de partage !
+                </p>
+              )}
+            </form>
+
+            {/* Local file uploader */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-slate-600 uppercase flex items-center gap-1">
+                <Upload className="w-3 h-3" />
+                <span>Méthode B : Importer des fichiers locaux</span>
+              </span>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${
+                  isDragOver
+                    ? "border-[#0a66c2] bg-blue-50/20 scale-[0.98]"
+                    : "border-slate-300 hover:border-slate-400 hover:bg-slate-50/50"
+                }`}
+                id="drop-zone"
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  multiple
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                />
+                <p className="text-xs font-semibold text-slate-800">Glissez-déposez ou parcourez vos fichiers d'images</p>
+                <p className="text-[9px] text-slate-400 mt-1">PNG, JPG, WEBP (Max 50 Mo par image)</p>
+              </div>
+            </div>
+
+            {/* LIST OF CURRENT SLIDES */}
+            <div className="flex-1 flex flex-col pt-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ordre des Slides du Carrousel ({slides.length})</span>
+                {slides.length > 1 && (
+                  <span className="text-[9px] text-slate-400">Glissez-déposez pour changer l'ordre</span>
+                )}
+              </div>
+
+              {slides.length > 0 ? (
+                <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1" id="file-list">
+                  {slides.map((slide, index) => {
+                    const isActive = index === currentIndex;
+                    return (
+                      <div
+                        key={slide.id}
+                        draggable
+                        onDragStart={() => handleDragStartSlide(index)}
+                        onDragOver={(e) => handleDragOverSlide(e, index)}
+                        onDragEnd={handleDragEndSlide}
+                        onClick={() => setCurrentIndex(index)}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer ${
+                          isActive
+                            ? "border-[#0a66c2] bg-blue-50/10 ring-1 ring-[#0a66c2]/20"
+                            : "border-slate-200 bg-white hover:border-slate-300"
+                        }`}
+                        id={`slide-item-${index}`}
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex-1 border border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center text-center p-6 bg-slate-50">
-                <ImageIcon className="w-8 h-8 text-slate-300 stroke-1 mb-2" />
-                <p className="text-xs font-semibold text-slate-500">Aucun fichier</p>
-                <p className="text-[10px] text-slate-400 mt-1">Glissez des images pour démarrer de suite.</p>
-              </div>
-            )}
+                        <div className="text-slate-400 cursor-grab active:cursor-grabbing shrink-0 p-0.5">
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </div>
+
+                        <div className="w-5 h-5 flex items-center justify-center bg-[#1d2226] text-white rounded-full font-bold text-[10px] shrink-0 font-mono">
+                          {index + 1}
+                        </div>
+
+                        <div className="w-10 h-12 bg-slate-100 border border-slate-200 rounded overflow-hidden shrink-0 relative flex items-center justify-center">
+                          <img
+                            src={slide.dataUrl}
+                            alt={slide.name}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 truncate" title={slide.name}>
+                            {slide.name}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400 mt-0.5">
+                            {slide.size > 0 && <span>{formatSize(slide.size)}</span>}
+                            <span>{slide.width && slide.height ? `${slide.width}x${slide.height} px` : "Web Image"}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={(e) => deleteSlide(index, e)}
+                          type="button"
+                          className="p-1 text-slate-400 hover:text-red-650 transition-colors rounded hover:bg-slate-50 shrink-0"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="border border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center text-center p-6 bg-slate-50">
+                  <ImageIcon className="w-8 h-8 text-slate-300 stroke-1 mb-2" />
+                  <p className="text-xs font-semibold text-slate-500">Aucun visuel de configuré</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Glissez des images ou collez un lien d'image ci-dessus pour le charger.</p>
+                </div>
+              )}
+            </div>
           </div>
+
         </section>
 
-        {/* RIGHT COLUMN: Simulator Arena (8 Cols) */}
-        <section className="lg:col-span-8 p-6 flex flex-col items-center justify-start overflow-y-auto space-y-5" id="col-preview">
+        {/* RIGHT COLUMN: Real Dynamic LinkedIn Feed Simulator (7 Cols / 12) - ZONE EXCLUSION REMOVED */}
+        <section className="xl:col-span-7 bg-[#f3f2f0] p-4 lg:p-6 flex flex-col items-center justify-start overflow-y-auto space-y-4" id="col-preview">
           
-          {/* Controls toolbar */}
-          <div className="w-full max-w-[500px] flex items-center justify-between bg-white border border-slate-200 rounded-xl p-2.5 shadow-sm" id="tools-panel">
-            {/* View selectors */}
-            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/40">
-              <button
-                onClick={() => setPreviewMode("desktop")}
-                type="button"
-                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md transition-all cursor-pointer ${
-                  previewMode === "desktop"
-                    ? "bg-white text-slate-900 shadow-sm font-bold"
-                    : "text-slate-550 hover:text-slate-900"
-                }`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                <span>Desktop</span>
-              </button>
-              <button
-                onClick={() => setPreviewMode("mobile")}
-                type="button"
-                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md transition-all cursor-pointer ${
-                  previewMode === "mobile"
-                    ? "bg-white text-slate-900 shadow-sm font-bold"
-                    : "text-slate-550 hover:text-slate-900"
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Mobile</span>
-              </button>
+          {/* Controls toolbar (Pristine - Area switch and checklist removed for a clean presentation) */}
+          <div className="w-full max-w-[550px] flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3 shadow-sm" id="tools-panel">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-600">Simuler le Rendu sur :</span>
+              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                  onClick={() => setPreviewMode("desktop")}
+                  type="button"
+                  className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+                    previewMode === "desktop"
+                      ? "bg-white text-slate-900 shadow-sm font-bold"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>Ordinateur</span>
+                </button>
+                <button
+                  onClick={() => setPreviewMode("mobile")}
+                  type="button"
+                  className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+                    previewMode === "mobile"
+                      ? "bg-white text-slate-900 shadow-sm font-bold"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Téléphone Mobile</span>
+                </button>
+              </div>
             </div>
 
-            {/* Safe boundaries selector switcher */}
-            <button
-              onClick={() => setSafeAreaOn(!safeAreaOn)}
-              type="button"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
-                safeAreaOn
-                  ? "bg-amber-50 border-amber-200 text-amber-700 font-bold"
-                  : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <Shield className={`w-3.5 h-3.5 ${safeAreaOn ? "fill-amber-500 stroke-white" : ""}`} />
-              <span>Zone Safe : {safeAreaOn ? "ACTIF" : "OFF"}</span>
-            </button>
+            <div className="px-3 py-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg select-none font-medium">
+              Aperçu Réel Net
+            </div>
           </div>
 
+          {/* SIMULATION ZONE CARD */}
           {slides.length > 0 ? (
             <div className="w-full flex flex-col items-center space-y-4">
               
-              {/* Dynamic Mockup Viewport frame */}
+              {/* Dynamic Viewport frame styled as a LinkedIn Post container without overlay lines */}
               <div
-                className={`relative transition-all duration-300 w-full overflow-hidden ${
+                className={`transition-all duration-300 w-full ${
                   previewMode === "mobile"
-                    ? "max-w-[340px] border-[12px] border-slate-950 rounded-[40px] shadow-2xl bg-[#0f172a] aspect-[9/19] flex flex-col justify-between"
-                    : "max-w-[480px] bg-[#0f172a] rounded-xl border border-slate-300/80 shadow-lg aspect-[4/5]"
+                    ? "max-w-[360px] border-[10px] border-slate-900 rounded-[36px] bg-[#f3f2f0] shadow-2xl p-0 overflow-hidden"
+                    : "max-w-[550px] bg-[#f3f2f0] rounded-none shadow-none border-0"
                 }`}
                 id="carousel-outer"
               >
                 
-                {/* Mobile top simulator header wrapper bar */}
+                {/* Mobile top mockup standard header */}
                 {previewMode === "mobile" && (
-                  <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-28 h-4.5 bg-black rounded-full z-40 flex items-center justify-around px-2">
-                    <div className="w-2.5 h-2.5 bg-slate-900 rounded-full"></div>
+                  <div className="bg-black text-white px-5 py-1 flex items-center justify-between text-[11px] font-semibold border-b border-slate-200">
+                    <span>10:24</span>
+                    <div className="w-20 h-4 bg-black rounded-full z-45 mx-auto"></div>
+                    <div className="flex gap-1 items-center">
+                      <span>LTE</span>
+                      <div className="w-4 h-2 bg-white rounded-xs"></div>
+                    </div>
                   </div>
                 )}
 
-                {/* Subtitle information */}
-                {previewMode === "mobile" && (
-                  <div className="bg-white border-b border-slate-100 pt-7 pb-2 px-4 flex items-center justify-between shrink-0 select-none text-slate-700 font-semibold text-[10px] z-20">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-[#0a66c2] rounded-full"></div>
-                      <span>Simulation Mobile</span>
-                    </div>
-                    <span className="bg-slate-100 px-2 py-0.5 rounded-full font-mono font-bold text-slate-600">
-                      {currentIndex + 1} / {slides.length}
-                    </span>
-                  </div>
-                )}
-
-                {/* Main slide display center container (exactly 4:5 aspect layout) */}
-                <div className="relative w-full h-full flex-1 flex items-center justify-center bg-slate-950">
-                  <img
-                    src={slides[currentIndex]?.dataUrl}
-                    alt={`Slide ${currentIndex + 1}`}
-                    className="w-full h-full object-contain pointer-events-none select-none"
-                    referrerPolicy="no-referrer"
-                  />
-
-                  {/* Top-right index counter natively rendered by LinkedIn */}
-                  <div className="absolute top-3 right-3 z-30 bg-black/55 backdrop-blur text-[11px] text-white font-semibold font-mono px-2.5 py-1 rounded-full pointer-events-none tracking-wider shadow-sm">
-                    {currentIndex + 1}/{slides.length}
-                  </div>
-
-                  {/* LinkedIn blue bottom progression line tracking */}
-                  <div className="absolute bottom-0 left-0 w-full h-1 bg-black/20 z-30 pointer-events-none">
-                    <div
-                      className="h-full bg-[#0a66c2] transition-all duration-300"
-                      style={{ width: `${((currentIndex + 1) / slides.length) * 100}%` }}
-                    ></div>
-                  </div>
-
-                  {/* Physical navigation chevrons for easier click operations */}
-                  <button
-                    onClick={() => setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length)}
-                    type="button"
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 p-2 bg-black/40 hover:bg-black/60 rounded-full text-white shadow-md z-30 transition-all cursor-pointer"
-                    title="Slide Précédente"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={() => setCurrentIndex((prev) => (prev + 1) % slides.length)}
-                    type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-black/40 hover:bg-black/60 rounded-full text-white shadow-md z-30 transition-all cursor-pointer"
-                    title="Slide Suivante"
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-
-                  {/* Visual Safe Zone boundaries layout meshes */}
-                  {safeAreaOn && (
-                    <div className="absolute inset-0 z-20 pointer-events-none" id="safe-area-lines">
-                      {/* Top Unstable area warning */}
-                      <div className="absolute inset-x-0 top-0 h-[100px] bg-rose-500/10 border-b border-dashed border-rose-500 flex items-center justify-center">
-                        <span className="text-[9px] text-rose-800 font-bold bg-white/90 px-1.5 py-0.5 rounded shadow">
-                          Zone d'exclusion du numéro {currentIndex + 1}/{slides.length}
-                        </span>
+                {/* Simulated White Container Feed post */}
+                <div className="bg-white border border-slate-200 rounded-none md:rounded-lg shadow-sm p-4 w-full text-slate-900">
+                  
+                  {/* Creator header profile */}
+                  <div className="flex items-start justify-between mb-3 select-none">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 bg-[#0a66c2] text-white font-bold rounded-full flex items-center justify-center text-sm shrink-0">
+                        {companyName ? companyName.charAt(0).toUpperCase() : "E"}
                       </div>
-
-                      {/* Bottom Unstable area warning */}
-                      <div className="absolute inset-x-0 bottom-0 h-[110px] bg-rose-500/10 border-t border-dashed border-rose-500 flex items-center justify-center">
-                        <span className="text-[9px] text-rose-800 font-bold bg-white/90 px-1.5 py-0.5 rounded shadow">
-                          Zone d'exclusion de la barre bleue LinkedIn
-                        </span>
-                      </div>
-
-                      {/* Side borders padding */}
-                      <div className="absolute inset-y-0 left-0 w-[44px] bg-amber-500/5 border-r border-dashed border-amber-500"></div>
-                      <div className="absolute inset-y-0 right-0 w-[44px] bg-amber-500/5 border-l border-dashed border-amber-500"></div>
-
-                      <div className="absolute top-[102px] bottom-[112px] left-[46px] right-[46px] border border-dashed border-emerald-500 flex items-center justify-center">
-                        <span className="text-[10px] text-emerald-800 font-bold bg-white/90 px-2.5 py-1 rounded-full shadow border border-emerald-200">
-                          ZONE DE SÉCURITÉ : OK POUR TEXTES 
-                        </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-bold text-slate-900 hover:text-[#0a66c2] hover:underline cursor-pointer truncate">
+                            {companyName || "Mon Carrousel"}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal shrink-0">• 1er</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{companyTitle || "Professionnel LinkedIn"}</p>
+                        <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-0.5">
+                          <span>À l'instant</span>
+                          <span>•</span>
+                          <span>Sponsorisé 🌐</span>
+                        </div>
                       </div>
                     </div>
-                  )}
+                    <button className="text-[11px] font-bold text-[#0a66c2] hover:bg-blue-50 px-2.5 py-1 rounded cursor-pointer shrink-0">
+                      + Suivre
+                    </button>
+                  </div>
+
+                  {/* Text hook */}
+                  <div className="text-xs text-slate-900 mb-3 leading-relaxed whitespace-pre-line" id="linkedin-post-text">
+                    {(() => {
+                      const limit = previewMode === "mobile" ? 140 : 220;
+                      if (adText.length <= limit || isAdTextExpanded) {
+                        return (
+                          <div>
+                            {adText}
+                            {adText.length > limit && (
+                              <button
+                                onClick={() => setIsAdTextExpanded(false)}
+                                className="text-slate-400 font-bold ml-1.5 hover:underline text-[10px]"
+                              >
+                                [Réduire]
+                              </button>
+                            )}
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div>
+                            {adText.slice(0, limit)}...{" "}
+                            <button
+                              onClick={() => setIsAdTextExpanded(true)}
+                              className="text-[#0a66c2] font-semibold hover:underline block md:inline font-sans mt-1 md:mt-0"
+                            >
+                              voir plus
+                            </button>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </div>
+
+                  {/* Carousel Container Frame exactly 4:5 Portrait format - NO EXCLUSION GRIDS */}
+                  <div className="relative aspect-[4/5] bg-slate-950 w-full overflow-hidden border border-slate-200 group rounded" id="stage-carousel-container">
+                    
+                    <img
+                      src={slides[currentIndex]?.dataUrl}
+                      alt={`Slide focus ${currentIndex + 1}`}
+                      className="w-full h-full object-contain pointer-events-none select-none"
+                      referrerPolicy="no-referrer"
+                    />
+
+                    {/* Top-right standard UI indicator of slides count */}
+                    <div className="absolute top-3 right-3 z-30 bg-black/60 backdrop-blur text-[10.5px] text-white font-bold font-mono px-2.5 py-1 rounded-full pointer-events-none tracking-wide shadow">
+                      {currentIndex + 1}/{slides.length}
+                    </div>
+
+                    {/* Progress tracking line */}
+                    <div className="absolute bottom-0 left-0 w-full h-1 bg-black/30 z-30 pointer-events-none">
+                      <div
+                        className="h-full bg-[#0a66c2] transition-all duration-300"
+                        style={{ width: `${((currentIndex + 1) / slides.length) * 100}%` }}
+                      ></div>
+                    </div>
+
+                    {/* Smooth navigational cursor arrow triggers */}
+                    <button
+                      onClick={() => setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length)}
+                      type="button"
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 p-2 bg-black/45 hover:bg-black/65 rounded-full text-white shadow-md z-30 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                      title="Précédent"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => setCurrentIndex((prev) => (prev + 1) % slides.length)}
+                      type="button"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-black/45 hover:bg-black/65 rounded-full text-white shadow-md z-30 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                      title="Suivant"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* LinkedIn Action Buttons (Fake Feed Interactions to complete realism) */}
+                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-150 text-slate-500 text-xs">
+                    <button className="flex items-center gap-1.5 hover:bg-slate-100 py-2 px-3 rounded-lg font-semibold cursor-pointer transition">
+                      <ThumbsUp className="w-4 h-4" />
+                      <span>J'aime</span>
+                    </button>
+                    <button className="flex items-center gap-1.5 hover:bg-slate-100 py-2 px-3 rounded-lg font-semibold cursor-pointer transition">
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Commenter</span>
+                    </button>
+                    <button className="flex items-center gap-1.5 hover:bg-slate-100 py-2 px-3 rounded-lg font-semibold cursor-pointer transition">
+                      <Share2 className="w-4 h-4" />
+                      <span>Partager</span>
+                    </button>
+                    <button className="flex items-center gap-1.5 hover:bg-slate-100 py-2 px-3 rounded-lg font-semibold cursor-pointer transition">
+                      <Send className="w-4 h-4" />
+                      <span>Envoyer</span>
+                    </button>
+                  </div>
+
                 </div>
 
-                {/* Mobile bottom empty shelf simulator */}
+                {/* Mobile bottom simulator utility menu shelf */}
                 {previewMode === "mobile" && (
-                  <div className="h-4 bg-white shrink-0 z-25"></div>
+                  <div className="bg-white border-t border-slate-200 py-2 px-6 flex justify-between text-slate-400 z-30 text-[10px] shrink-0">
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs text-[#0a66c2]">🏠</span>
+                      <span className="text-[9px] text-[#0a66c2] font-semibold">Accueil</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs">👥</span>
+                      <span className="text-[9px]">Réseau</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs">🔔</span>
+                      <span className="text-[9px]">Notifications</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs">💼</span>
+                      <span className="text-[9px]">Emplois</span>
+                    </div>
+                  </div>
                 )}
+
               </div>
 
-              {/* Slider Dots Navigator */}
-              <div className="flex items-center gap-1 bg-white border border-slate-200 p-1.5 rounded-full shadow-sm">
+              {/* Slider Dots Indicator */}
+              <div className="flex items-center gap-1 bg-white border border-slate-200 p-2 rounded-full shadow-sm">
                 {slides.map((_, index) => (
                   <button
                     key={index}
@@ -508,35 +852,20 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Standard format check alert banner */}
-              <div className="w-full max-w-[480px]">
-                {slides[currentIndex]?.isValidDimensions ? (
-                  <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
-                    <CheckCircle className="w-4 h-4 shrink-0" />
-                    <p><b>Visuel Conforme :</b> Cette slide respecte parfaitement le format vertical portrait recommandé <b>(1080 × 1350 px)</b>.</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                    <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
-                    <div>
-                      <p><b>⚠️ Dimensions différentes :</b> Vos dimensions réelles sont de <b>{slides[currentIndex]?.width} × {slides[currentIndex]?.height} px</b>.</p>
-                      <p className="text-[10px] text-amber-700 mt-0.5">Pour éviter un recadrage flou par LinkedIn, convertissez vos images au format standard 1080 × 1350.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-center text-slate-400 text-[10px] flex items-center gap-1 mt-1 justify-center">
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span>Astuce : Vous pouvez utiliser les flèches directionnelles de votre clavier <b>← / →</b> pour passer les images.</span>
+              {/* Keyboard navigation tip indicator */}
+              <div className="text-center text-slate-400 text-[10px] flex items-center gap-1.5 justify-center max-w-[500px] select-none">
+                <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>
+                  <b>Astuce clavier :</b> Utilisez les flèches directionnelles de votre clavier <b>←</b> et <b>→</b> pour naviguer sur le carrousel.
+                </span>
               </div>
             </div>
           ) : (
-            <div className="flex-1 w-full max-w-[480px] bg-slate-100/50 rounded-xl border border-dashed border-slate-300 shadow-inner flex flex-col items-center justify-center p-8 text-center aspect-[4/5]" id="empty-state">
+            <div className="flex-1 w-full max-w-[550px] bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center p-8 text-center aspect-[4/5]" id="empty-state">
               <ImageIcon className="w-12 h-12 text-slate-300 stroke-1 mb-3" />
-              <h3 className="font-bold text-slate-700">En attente des images</h3>
+              <h3 className="font-bold text-slate-655">En attente de visuels</h3>
               <p className="text-xs text-slate-400 max-w-[280px] mt-2">
-                Glissez-déposez vos images dans la zone de gauche pour tester et prévisualiser immédiatement leur affichage LinkedIn.
+                Glissez-déposez des slides à gauche ou ajoutez un lien d'image pour afficher l'aperçu de publication finale.
               </p>
             </div>
           )}
