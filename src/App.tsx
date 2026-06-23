@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   Upload, Trash2, Smartphone, Monitor, ArrowLeft, ArrowRight,
   GripVertical, Image as ImageIcon, HelpCircle, ThumbsUp, MessageSquare,
-  Share2, Send, Check, Sparkles, Link as LinkIcon, AlertCircle, Copy
+  Share2, Send, Check, Sparkles, Link as LinkIcon, AlertCircle, Copy,
+  Maximize2, Minimize2, X
 } from "lucide-react";
 
 interface Slide {
@@ -18,6 +19,7 @@ export default function App() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   
   // Custom advertiser post states
   const [companyName, setCompanyName] = useState<string>("Mon Entreprise");
@@ -153,7 +155,7 @@ export default function App() {
     ]);
   }, []);
 
-  // Keyboard navigation listeners (Arrow Left & Arrow Right)
+  // Keyboard navigation listeners (Arrow Left & Arrow Right & Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (slides.length === 0) return;
@@ -161,6 +163,8 @@ export default function App() {
         setCurrentIndex((prev) => (prev + 1) % slides.length);
       } else if (e.key === "ArrowLeft") {
         setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
+      } else if (e.key === "Escape") {
+        setIsFullscreen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -378,7 +382,7 @@ export default function App() {
                 <Share2 className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Partager le Carrousel réel </h3>
+                <h3 className="text-xs font-bold text-slate-905 uppercase tracking-wide">Partager le Carrousel réel </h3>
                 <p className="text-[10px] text-slate-500">Transmettez le lien exact de l'aperçu prêt à être visionné</p>
               </div>
             </div>
@@ -503,7 +507,7 @@ export default function App() {
                 </button>
               </div>
               {urlInputError ? (
-                <p className="text-[10px] text-red-600 font-semibold">{urlInputError}</p>
+                <p className="text-[10px] text-red-650 font-semibold">{urlInputError}</p>
               ) : (
                 <p className="text-[9px] text-slate-400 font-normal">
                   Idéal pour charger des visuels hébergés de manière permanente et les envoyer directement dans votre lien de partage !
@@ -624,8 +628,8 @@ export default function App() {
         {/* RIGHT COLUMN: Real Dynamic LinkedIn Feed Simulator (7 Cols / 12) - ZONE EXCLUSION REMOVED */}
         <section className="xl:col-span-7 bg-[#f3f2f0] p-4 lg:p-6 flex flex-col items-center justify-start overflow-y-auto space-y-4" id="col-preview">
           
-          {/* Controls toolbar (Pristine - Area switch and checklist removed for a clean presentation) */}
-          <div className="w-full max-w-[550px] flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3 shadow-sm" id="tools-panel">
+          {/* Controls toolbar */}
+          <div className="w-full max-w-[550px] flex items-center justify-between bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex-wrap gap-2" id="tools-panel">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-600">Simuler le Rendu sur :</span>
               <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
@@ -656,9 +660,18 @@ export default function App() {
               </div>
             </div>
 
-            <div className="px-3 py-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg select-none font-medium">
-              Aperçu Réel Net
-            </div>
+            {/* FULL SCREEN ACTION TRIGGER - USER DEMAND */}
+            {slides.length > 0 && (
+              <button
+                onClick={() => setIsFullscreen(true)}
+                type="button"
+                className="flex items-center gap-2 px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer"
+                title="Afficher l'aperçu final plein écran"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>Plein Écran ⛶</span>
+              </button>
+            )}
           </div>
 
           {/* SIMULATION ZONE CARD */}
@@ -688,12 +701,12 @@ export default function App() {
                 )}
 
                 {/* Simulated White Container Feed post */}
-                <div className="bg-white border border-slate-200 rounded-none md:rounded-lg shadow-sm p-4 w-full text-slate-900">
+                <div className="bg-white border border-slate-200 rounded-none md:rounded-lg shadow-sm p-4 w-full text-slate-900 animate-fadeIn">
                   
                   {/* Creator header profile */}
                   <div className="flex items-start justify-between mb-3 select-none">
                     <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 bg-[#0a66c2] text-white font-bold rounded-full flex items-center justify-center text-sm shrink-0">
+                      <div className="w-10 h-10 bg-[#0a66c2] text-white font-bold rounded-full flex items-center justify-center text-sm shrink-0 uppercase">
                         {companyName ? companyName.charAt(0).toUpperCase() : "E"}
                       </div>
                       <div className="min-w-0">
@@ -756,7 +769,7 @@ export default function App() {
                     <img
                       src={slides[currentIndex]?.dataUrl}
                       alt={`Slide focus ${currentIndex + 1}`}
-                      className="w-full h-full object-contain pointer-events-none select-none"
+                      className="w-full h-full object-contain pointer-events-none select-none animate-fadeIn"
                       referrerPolicy="no-referrer"
                     />
 
@@ -872,6 +885,164 @@ export default function App() {
         </section>
 
       </div>
+
+      {/* FULLSCREEN IMMERSIVE PRESENTATION THEATER MODE - SPECIALLY DEVELOPED FOR CLIENTS / PRESENTATION GIE */}
+      {isFullscreen && slides.length > 0 && (
+        <div className="fixed inset-0 bg-[#0c0f16] z-50 flex flex-col lg:flex-row overflow-hidden animate-fadeIn" id="fullscreen-overlay">
+          
+          {/* Main Presentation Stage Area */}
+          <div className="flex-1 relative flex flex-col justify-between items-center bg-[#07090e] p-4 lg:p-8 select-none">
+            
+            {/* Top header navigation buttons inside fullscreen */}
+            <div className="w-full max-w-5xl flex items-center justify-between text-slate-400 text-xs py-2 border-b border-slate-800/60 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-200">Mode Présentation</span>
+                <span className="text-[9px] bg-slate-800 text-slate-300 font-mono px-2 py-0.5 rounded-full">
+                  Appuyez sur <kbd className="bg-slate-750 px-1 py-0.5 rounded font-sans text-white text-[8.5px]">Échap</kbd> ou cliquez sur Retour
+                </span>
+              </div>
+              <span className="text-xs font-bold text-slate-200 font-mono tracking-wider bg-slate-900 border border-slate-800 px-3 py-1 rounded-md">
+                SLIDE {currentIndex + 1} SUR {slides.length}
+              </span>
+            </div>
+
+            {/* Slide showcase - Center box with exact responsive fits */}
+            <div className="relative flex-1 w-full max-w-4xl mx-auto flex items-center justify-center my-6">
+              <img
+                src={slides[currentIndex]?.dataUrl}
+                alt={`Slide presentation ${currentIndex + 1}`}
+                className="max-h-[75vh] max-w-[90vw] object-contain rounded-lg shadow-2xl border border-slate-800"
+                referrerPolicy="no-referrer"
+              />
+
+              {/* Prev / Next navigation overlays */}
+              <button
+                onClick={() => setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length)}
+                type="button"
+                className="absolute left-1 lg:-left-6 p-3 bg-slate-900/90 hover:bg-[#0a66c2] text-white rounded-full border border-slate-700/60 shadow-xl transition-all cursor-pointer hover:scale-105"
+                title="Précédent"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={() => setCurrentIndex((prev) => (prev + 1) % slides.length)}
+                type="button"
+                className="absolute right-1 lg:-right-6 p-3 bg-slate-900/90 hover:bg-[#0a66c2] text-white rounded-full border border-slate-700/60 shadow-xl transition-all cursor-pointer hover:scale-105"
+                title="Suivant"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Bottom active indicators dots panel */}
+            <div className="flex flex-col items-center gap-2.5 shrink-0">
+              <div className="flex items-center gap-1.5 bg-slate-900/80 border border-slate-800 p-2 rounded-full">
+                {slides.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentIndex(index)}
+                    className={`h-2.5 rounded-full transition-all duration-200 cursor-pointer ${
+                      index === currentIndex ? "w-8 bg-[#0a66c2]" : "w-2.5 bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  ></button>
+                ))}
+              </div>
+              <div className="text-[10px] text-slate-500 font-mono">
+                Modèle d'aperçu de carrousel 1080x1350 • Format d'image originel
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Presentation Info Dock Sidebar */}
+          <section className="w-full lg:w-[420px] bg-[#0f131a] border-t lg:border-t-0 lg:border-l border-slate-800 text-slate-100 flex flex-col justify-between shrink-0 overflow-y-auto" id="fullscreen-sidebar">
+            
+            {/* Sidebar header logo, profile info and page name */}
+            <div className="p-6 border-b border-slate-800/80 space-y-5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-widest text-[#0a66c2] uppercase bg-[#0a66c2]/10 px-2.5 py-1 rounded-md">
+                  Aperçu de post
+                </span>
+                
+                {/* Close modal action button */}
+                <button
+                  onClick={() => setIsFullscreen(false)}
+                  type="button"
+                  className="p-2 rounded-full bg-slate-850 hover:bg-red-600 hover:text-white text-slate-400 transition cursor-pointer flex items-center justify-center"
+                  title="Retourner au simulateur"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Company / Brand Profile */}
+              <div className="flex items-start gap-3 bg-slate-900/50 p-3 rounded-lg border border-slate-800/55 select-none">
+                <div className="w-12 h-12 bg-[#0a66c2] text-white font-bold rounded-full flex items-center justify-center text-lg uppercase shrink-0">
+                  {companyName ? companyName.charAt(0).toUpperCase() : "E"}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-extrabold text-sm text-white truncate">
+                    {companyName || "Mon Entreprise"}
+                  </h4>
+                  <p className="text-xs text-slate-400 truncate mt-0.5">
+                    {companyTitle || "Votre titre professionnel"}
+                  </p>
+                  <span className="inline-block mt-1.5 text-[10px] text-slate-500">
+                    Sponsorisé 🌐 • À l'instant
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Advertising text copywriting text (fully expanded with scrollbar) */}
+            <div className="flex-1 p-6 overflow-y-auto space-y-4">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
+                TEXTE PUBLICITAIRE DU POST
+              </span>
+              <div className="text-xs leading-relaxed text-slate-200 bg-slate-900/30 border border-slate-850 p-4 rounded-xl whitespace-pre-line font-sans">
+                {adText ? adText : "Aucun texte d'accroche saisi."}
+              </div>
+            </div>
+
+            {/* Quick action helper buttons inside presentation mode */}
+            <div className="p-6 border-t border-slate-800 bg-[#0b0e14] flex flex-col gap-3">
+              <button
+                onClick={handleShareProject}
+                type="button"
+                className={`w-full flex items-center justify-center gap-2 text-xs font-bold py-3 px-4 rounded-lg shadow-sm transition-all cursor-pointer ${
+                  shareCopied
+                    ? "bg-emerald-600 text-white"
+                    : "bg-[#1d2226] text-slate-200 hover:text-white hover:bg-slate-800 border border-slate-700"
+                }`}
+              >
+                {shareCopied ? (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Lien copié pour votre client !</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4.5 h-4.5 text-slate-400" />
+                    <span>Copier le Lien Direct du Projet</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setIsFullscreen(false)}
+                type="button"
+                className="w-full text-center py-2.5 text-xs text-slate-400 hover:text-white transition font-medium rounded-lg"
+              >
+                Retourner à l'Éditeur &rarr;
+              </button>
+            </div>
+
+          </section>
+
+        </div>
+      )}
+
     </div>
   );
 }
