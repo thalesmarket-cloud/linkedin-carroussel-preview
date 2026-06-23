@@ -1,0 +1,6 @@
+{
+  "name": "LinkedIn Carousel Previewer",
+  "description": "Préviseualisez et auditez vos carrousels LinkedIn (1080x1350) au format Desktop et Mobile avant publication, avec analyse IA intégrée.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
